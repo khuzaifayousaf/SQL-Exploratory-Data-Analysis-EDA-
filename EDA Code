@@ -1,0 +1,250 @@
+/* In this EDA Project we will use previous project called 
+	Datawarehouse project, we use gold layer DATASET for 
+	EDA Project */
+----First Step:>>>>>>>> DataBase Exploration<<<<<<<<<<<<<<<
+----Exploring all objects in the Database
+select*
+from INFORMATION_SCHEMA.TABLES;
+go
+------------------------
+----Exploring all columns in the Database
+select*
+from INFORMATION_SCHEMA.COLUMNS;
+go
+--------------------
+----->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+----- Second Step: >>>> Dimensions Exploration <<<<<<<
+---Identifying Unique values or Categories in each Dimension
+/*--Recognizing how data might be group or segmented,
+       which is useful for later analysis
+*/
+--- Explore all countries our customers come from
+select distinct
+cd.country
+from [gold].[customer_dim] as cd;
+go
+
+---Explore All Categories "Major Divison"
+select distinct
+pd.product_category,
+pd.product_subcategory,
+pd.product_name
+from [gold].[product_dim] as pd
+order by 1,2,3;
+go
+----------------------------------
+----->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+----Third Step: Date Exploration
+----->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+---Identify the earliest & Latest Date (Boundaries).
+---Understand the scope of data & Timespan.
+---Find the date of the first & last Order
+--How many Years of sales available
+select
+min(sf.order_date) as first_order_date,
+max(sf.order_date) as last_order_date,
+DATEDIFF(MONTH,min(sf.order_date),
+	max(sf.order_date)) as order_range_by_month,
+DATEDIFF(year,min(sf.order_date),
+	max(sf.order_date)) as order_range_by_years
+from [gold].[sales_fact] as sf;
+go
+----Find the Youngest and Oldest customer
+select
+min(cd.birthdate) as oldest_customers,
+DATEDIFF(year,min(cd.birthdate),
+		GETDATE()) as oldest_customer_age,
+max(cd.birthdate) as youngest_customer,
+DATEDIFF(year,max(cd.birthdate),
+		GETDATE()) as youngest_customer_age
+from [gold].[customer_dim] as cd;
+go
+----->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+---Fourth Step: Measure Exploration
+----->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+/*Calculate the Key Matrics of the Business
+		Highest Level of Aggregation
+		Lowest Level of Details
+*/
+---Find the Total Sales
+select
+format(sum(sf.sales),'c') as total_sales
+from [gold].[sales_fact] as sf;
+---Find how many items are sold
+select
+sum(sf.quantity) as total_quantity
+from [gold].[sales_fact] as sf;
+---Find the average selling price
+select
+format(avg(sf.price),'c') as avg_selling_price
+from [gold].[sales_fact] as sf;
+---Find the total number of orders
+select
+count(sf.sales_order_number) as total_orders,
+count(distinct sf.sales_order_number) as total_orders_unique
+from [gold].[sales_fact] as sf
+---Find the total number of Products
+select
+count(pd.product_number) as total_products,
+count(distinct pd.product_number) as total_products_unique
+from [gold].[product_dim] as pd
+
+---Find the total number of Customers
+select
+count(cd.customer_key) as total_customers,
+count(distinct cd.customer_key) as total_customers_unique
+from [gold].[customer_dim] as cd
+---Find the total number of Customers that has placed an order
+select
+count(distinct sf.customer_key) as customers_placed_orders
+from [gold].[sales_fact] as sf;
+go
+-------->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+-- Joining  all For easy Understanding
+------>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+select
+'Total Sales' as Measure_Name,
+sum(sf.sales) as Measure_Value
+from [gold].[sales_fact] as sf
+UNION ALL
+select
+'Total Quantity' as Measure_Name,
+sum(sf.quantity) as Measure_Value
+from [gold].[sales_fact] as sf
+union all
+select
+'Avg_Selling_Price' as Measure_Name,
+avg(sf.price) as Measure_Value
+from [gold].[sales_fact] as sf
+union all
+select
+'Total Orders' as Measure_Name,
+count(sf.sales_order_number) as Measure_Value
+from [gold].[sales_fact] as sf
+union all
+select
+'Total_Orders_Unique' as Measure_Name,
+count(distinct sf.sales_order_number) as Measure_Value
+from [gold].[sales_fact] as sf
+union all
+select
+'Total_Products_Unique' as Measure_Name,
+count(distinct pd.product_number) as Measure_Value
+from [gold].[product_dim] as pd
+union all
+select
+'Total_Customers_Unique' as Measure_Name,
+count(distinct cd.customer_key) as Measure_Value
+from [gold].[customer_dim] as cd
+union all
+select
+'Customers_Placed_Orders' as Measure_Name,
+count(distinct sf.customer_key) as Measure_Value
+from [gold].[sales_fact] as sf;
+go
+----->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+-----Fifth Step: Magnitude
+---->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+/* 
+Compare the measure values by categoties,
+Help us understand importance of different 
+categories
+*/
+---Find the total customers by countries?
+select
+cd.country,
+count(cd.customer_key) as total_customers
+from[gold].[customer_dim] as cd
+group by cd.country;
+---Find the total customers by gender?
+select
+cd.gender,
+count(cd.customer_key) as total_customers
+from [gold].[customer_dim] as cd
+group by cd.gender
+order by 
+case when cd.gender = 'n/a' then 1
+else 0 end,total_customers asc
+---Find the total Products by categories?
+select
+pd.product_category,
+count(pd.product_id) as total_product_by_categories
+from [gold].[product_dim] as pd
+group by pd.product_category
+order by  
+case when pd.product_category is null then 1
+else 0
+end,total_product_by_categories asc;
+---What is the Average cost in each category?
+select
+pd.product_category,
+avg(sf.price) as avg_cost
+from [gold].[sales_fact] as sf
+left join [gold].[product_dim] as pd
+on sf.product_key = pd.product_key
+group by pd.product_category;
+---What is the Total Revenue Generated for each category?
+select
+pd.product_category,
+format(sum(sf.sales),'c') as total_revenue
+from [gold].[sales_fact] as sf
+left join [gold].[product_dim] as pd
+on sf.product_key = pd.product_key
+group by pd.product_category;
+---Find the Total Revenue is generated by each customer?
+select
+cd.customer_name,
+cd.firstname,
+cd.lastname,
+SUM(sf.sales) as Total_Revenue_By_customers
+from [gold].[sales_fact] as sf
+Left join [gold].[customer_dim] as cd
+on cd.customer_key = sf.customer_key
+group by 
+cd.customer_name,
+cd.firstname,
+cd.lastname
+order by Total_Revenue_By_customers desc;
+---what is the distribution of sold item accross countries?
+select
+cd.country,
+SUM(sf.quantity) as Total_Distribution_sold_items
+from [gold].[sales_fact] as sf
+Left join [gold].[customer_dim] as cd
+on cd.customer_key = sf.customer_key
+group by 
+cd.country
+order by 
+case when cd.country = 'n/a' then 1 else 0
+end,
+Total_Distribution_sold_items asc;
+go
+----->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+---Sixth one : Ranking Analysis
+----->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+---Which 5 Products Generate the Highest Revenue?
+select*
+from (
+select
+pd.product_name,
+format(sum(sf.sales),'c') as Total_Revenue_By_Product,
+DENSE_RANK() over(order by
+		sum(sf.sales) desc) as Top_good_performing_Products
+from [gold].[sales_fact] as sf
+left join [gold].[product_dim] as pd
+on sf.product_key = pd.product_key
+group by pd.product_name)t
+where Top_good_performing_Products<6
+---->>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+--- what are the 5 worst performing products in terms of sales?
+select*
+from (
+select
+pd.product_name,
+format(sum(sf.sales),'c') as Total_Revenue_By_Product,
+DENSE_RANK() over(order by sum(sf.sales) asc) as Top_worst_performing_Products
+from [gold].[sales_fact] as sf
+left join [gold].[product_dim] as pd
+on sf.product_key = pd.product_key
+group by pd.product_name)t
+where Top_worst_performing_Products<6
